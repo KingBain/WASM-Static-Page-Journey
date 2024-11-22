@@ -1,0 +1,203 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <title>Celestial Bodies Database</title>
+    <script src="https://cdn.jsdelivr.net/npm/sql.js@1.8.0/dist/sql-wasm.js"></script>
+    <script src="https://cdn.plot.ly/plotly-latest.min.js"></script>
+    <style>
+        body { 
+            font-family: Arial, sans-serif; 
+            max-width: 800px; 
+            margin: auto; 
+            padding: 20px; 
+        }
+        input, button { margin: 10px 0; }
+        table { width: 100%; border-collapse: collapse; }
+        th, td { border: 1px solid black; padding: 8px; }
+    </style>
+</head>
+<body>
+    <h1>Celestial Bodies Database</h1>
+
+    <!-- Query Celestial Bodies Section -->
+    <h2>Query Celestial Bodies</h2>
+    <input type="text" id="query-name" placeholder="Celestial body name">
+    <button onclick="handleQuery()">Query Database</button>
+    <div id="query-output"></div>
+
+    <!-- Celestial Bodies Plot -->
+    <h2>Celestial Bodies Plot</h2>
+    <div id="celestial-bodies-plot"></div>
+
+    <!-- Add Celestial Body Section -->
+    <h2>Add New Celestial Body</h2>
+    <input type="text" id="add-name" placeholder="Name">
+    <input type="text" id="add-type" placeholder="Type">
+    <input type="number" id="add-radius" placeholder="Radius">
+    <input type="number" id="add-mass" placeholder="Mass">
+    <input type="number" id="add-distance" placeholder="Distance from sun">
+    <button onclick="handleAdd()">Add Celestial Body</button>
+    <div id="add-output"></div>
+
+    <!-- Delete Celestial Body Section -->
+    <h2>Delete Celestial Body</h2>
+    <input type="number" id="delete-id" placeholder="ID">
+    <button onclick="handleDelete()">Delete Celestial Body</button>
+    <div id="delete-output"></div>
+
+    <script>
+        // Database management
+        class DatabaseManager {
+            constructor(dbPath) {
+                this.dbPath = dbPath;
+                this.db = null;
+            }
+
+            async init() {
+                const SQL = await initSqlJs({
+                    locateFile: file => `https://cdn.jsdelivr.net/npm/sql.js@1.8.0/dist/${file}`
+                });
+                
+                const response = await fetch(this.dbPath);
+                const buffer = await response.arrayBuffer();
+                this.db = new SQL.Database(new Uint8Array(buffer));
+            }
+
+            query(name) {
+                return this.db.exec(`SELECT * FROM "public.celestial_bodies" WHERE name LIKE '%${name}%'`);
+            }
+
+            add(name, type, radius, mass, distance) {
+                const stmt = this.db.prepare('INSERT INTO "public.celestial_bodies" (name, body_type, mean_radius_km, mass_kg, distance_from_sun_km) VALUES (?, ?, ?, ?, ?)');
+                stmt.run([name, type, radius, mass, distance]);
+                stmt.free();
+            }
+
+            delete(id) {
+                this.db.run(`DELETE FROM "public.celestial_bodies" WHERE id = ?`, [id]);
+            }
+        }
+
+        // Visualization manager
+        class VisualizationManager {
+            displayTable(queryResult, outputDiv) {
+                if (queryResult.length > 0) {
+                    const rows = queryResult[0].values;
+                    const headers = queryResult[0].columns;
+                    
+                    const table = document.createElement('table');
+                    const headerRow = table.insertRow();
+                    headers.forEach(header => {
+                        const th = document.createElement('th');
+                        th.textContent = header;
+                        headerRow.appendChild(th);
+                    });
+
+                    rows.forEach(row => {
+                        const tr = table.insertRow();
+                        row.forEach(cell => {
+                            const td = tr.insertCell();
+                            td.textContent = cell;
+                        });
+                    });
+
+                    outputDiv.innerHTML = '';
+                    outputDiv.appendChild(table);
+                    
+                    return rows;
+                } 
+                outputDiv.textContent = 'No celestial bodies found.';
+                return null;
+            }
+
+            plotCelestialBodies(data) {
+                if (!data) return;
+
+                const distances = data.map(row => row[5]);
+                const masses = data.map(row => row[4]);
+                const names = data.map(row => row[1]);
+
+                Plotly.newPlot('celestial-bodies-plot', [{
+                    x: distances,
+                    y: masses,
+                    text: names,
+                    mode: 'markers',
+                    type: 'scatter'
+                }], {
+                    title: 'Celestial Bodies',
+                    xaxis: { title: 'Distance from sun (km)' },
+                    yaxis: { title: 'Mass (kg)' }
+                });
+            }
+        }
+
+        // Global instance of the DatabaseManager
+        const dbManager = new DatabaseManager('https://raw.githubusercontent.com/KingBain/datahub-images/refs/heads/main/managed-containers/sample-dashapp/sql/sqlite/data.sqlite');
+        const visManager = new VisualizationManager();
+
+        document.addEventListener('DOMContentLoaded', async () => {
+            await dbManager.init();
+            console.log("Database initialized.");
+        });
+
+        // Event handlers
+        async function handleQuery() {
+            try {
+                const name = document.getElementById('query-name').value;
+                const queryResult = dbManager.query(name);
+                const rows = visManager.displayTable(queryResult, document.getElementById('query-output'));
+                visManager.plotCelestialBodies(rows);
+            } catch (error) {
+                console.error('Error querying the database:', error);
+                document.getElementById('query-output').textContent = 'An error occurred while querying the database.';
+            }
+        }
+
+        function handleAdd() {
+        try {
+            const name = document.getElementById('add-name').value;
+            const type = document.getElementById('add-type').value;
+            const radius = document.getElementById('add-radius').value;
+            const mass = document.getElementById('add-mass').value;
+            const distance = document.getElementById('add-distance').value;
+
+            dbManager.add(name, type, radius, mass, distance);
+
+            // Immediately refresh the output to make the added body queryable
+            handleQuery();
+
+            document.getElementById('add-output').textContent = 'Celestial body added successfully.';
+
+            // Clear input fields
+            document.getElementById('add-name').value = '';
+            document.getElementById('add-type').value = '';
+            document.getElementById('add-radius').value = '';
+            document.getElementById('add-mass').value = '';
+            document.getElementById('add-distance').value = '';
+        } catch (error) {
+            console.error('Error adding celestial body:', error);
+            document.getElementById('add-output').textContent = 'An error occurred while adding the celestial body.';
+        }
+    }
+
+        function handleDelete() {
+        try {
+            const id = document.getElementById('delete-id').value;
+            dbManager.delete(id);
+
+            // Immediately refresh the output to reflect the deletion
+            handleQuery();
+
+            document.getElementById('delete-output').textContent = 'Celestial body deleted successfully.';
+
+            // Clear input fields
+            document.getElementById('delete-id').value = '';
+        } catch (error) {
+            console.error('Error deleting celestial body:', error);
+            document.getElementById('delete-output').textContent = 'An error occurred while deleting the celestial body.';
+        }
+    }
+    </script>
+</body>
+</html>
