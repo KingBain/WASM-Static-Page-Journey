@@ -71,8 +71,7 @@ The demo application displays planetary data (e.g., radius, mass, distance from 
 - Explore compatibility with larger datasets and offline-first scenarios.
 
 ## Acknowledgments
-This project was inspired by the potential of using WebAssembly and static file hosting to drastically reduce the cost and complexity of deploying web applications. Special thanks to ChatGPT for assisting with the JavaScript and SQLite integration.
+This project was inspired by the potential of using WebAssembly and static file hosting to drastically reduce the cost and complexity of deploying web applications. 
 
----
+ChatGPT was used in assisting with the Python to JavaScript conversion.
 
-Try it out, and feel free to contribute to the project!
